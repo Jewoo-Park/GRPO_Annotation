@@ -123,7 +123,6 @@ video_r1_sft_annotator/
 ## 4. 환경 설치
 
 ```bash
-cd video_r1_sft_annotator
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -238,7 +237,6 @@ outputs/sft/summary.json
 ## 10. 가장 짧은 실행 순서
 
 ```bash
-cd video_r1_sft_annotator
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

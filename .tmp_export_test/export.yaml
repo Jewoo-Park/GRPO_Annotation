@@ -1,8 +1,8 @@
-processed_input_path: video_r1_sft_annotator/.tmp_export_test/processed.jsonl
-answer_style_path: video_r1_sft_annotator/.tmp_export_test/answer_style.jsonl
-reasoning_type_path: video_r1_sft_annotator/.tmp_export_test/reasoning_type.jsonl
-output_path: video_r1_sft_annotator/.tmp_export_test/out.json
-summary_path: video_r1_sft_annotator/.tmp_export_test/summary.json
+processed_input_path: .tmp_export_test/processed.jsonl
+answer_style_path: .tmp_export_test/answer_style.jsonl
+reasoning_type_path: .tmp_export_test/reasoning_type.jsonl
+output_path: .tmp_export_test/out.json
+summary_path: .tmp_export_test/summary.json
 include_reasoning_type_hint: true
 include_answer_style_hint: true
 default_answer_style: COT
