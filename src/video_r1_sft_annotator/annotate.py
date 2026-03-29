@@ -10,7 +10,14 @@ from PIL import Image
 from transformers import AutoProcessor
 from vllm import LLM, SamplingParams
 
-from .prompts import ANSWER_STYLE_LABELS, REASONING_TYPE_LABELS, build_annotation_prompt, system_prompt
+from .prompts import (
+    ANSWER_STYLE_LABELS,
+    REASONING_TYPE_LABELS,
+    build_annotation_prompt,
+    build_generation_prompt,
+    generation_system_prompt,
+    system_prompt,
+)
 from .utils import collect_frame_paths, load_jsonl, parse_json_block, write_json, write_jsonl
 
 
@@ -63,6 +70,9 @@ def resize_image_to_pixel_bounds(image: Image.Image, max_pixels: int, min_pixels
     return image.resize((new_w, new_h), Image.Resampling.BICUBIC)
 
 
+GENERATION_TASK = "generate_sft"
+
+
 def allowed_labels(task: str) -> set[str]:
     if task == "answer_style":
         return set(ANSWER_STYLE_LABELS)
@@ -102,7 +112,8 @@ def main() -> None:
         n=1,
     )
 
-    labels = allowed_labels(cfg.annotation_task)
+    is_generation = cfg.annotation_task == GENERATION_TASK
+    labels = None if is_generation else allowed_labels(cfg.annotation_task)
     label_counts = Counter()
     annotated_rows: list[dict] = []
 
@@ -120,16 +131,26 @@ def main() -> None:
             for path in frame_paths
         ]
 
-        user_prompt = build_annotation_prompt(
-            task=cfg.annotation_task,
-            question=str(row.get("question") or ""),
-            options=[str(opt) for opt in row.get("options") or []],
-            gold_answer=str(row.get("answer") or ""),
-        )
+        question = str(row.get("question") or "")
+        options = [str(opt) for opt in row.get("options") or []]
+        gold_answer = str(row.get("answer") or "")
+
+        if is_generation:
+            user_prompt = build_generation_prompt(question=question, options=options, gold_answer=gold_answer)
+            sys_prompt_text = generation_system_prompt()
+        else:
+            user_prompt = build_annotation_prompt(
+                task=cfg.annotation_task,
+                question=question,
+                options=options,
+                gold_answer=gold_answer,
+            )
+            sys_prompt_text = system_prompt(cfg.annotation_task)
+
         messages = [
             {
                 "role": "system",
-                "content": [{"type": "text", "text": system_prompt(cfg.annotation_task)}],
+                "content": [{"type": "text", "text": sys_prompt_text}],
             },
             {
                 "role": "user",
@@ -144,28 +165,44 @@ def main() -> None:
         )
         text = outputs[0].outputs[0].text
         payload = parse_json_block(text) or {}
-        label = str(payload.get("label") or "").strip().upper()
-        reason = str(payload.get("reason") or "").strip()
-        if label not in labels:
-            label = "INVALID"
 
-        label_counts[label] += 1
-        annotated_rows.append(
-            {
-                "question_id": row.get("question_id"),
-                "video_id": row.get("video_id"),
-                "source_subset": row.get("source_subset"),
-                "question_category": row.get("question_category"),
-                "question": row.get("question"),
-                "options": row.get("options"),
-                "gold_answer": row.get("answer"),
-                "annotation_task": cfg.annotation_task,
+        base_row = {
+            "question_id": row.get("question_id"),
+            "video_id": row.get("video_id"),
+            "source_subset": row.get("source_subset"),
+            "question_category": row.get("question_category"),
+            "question": row.get("question"),
+            "options": row.get("options"),
+            "gold_answer": gold_answer,
+            "annotation_task": cfg.annotation_task,
+            "model_response": text,
+            "frames": [str(path) for path in frame_paths],
+        }
+
+        if is_generation:
+            answer_raw = str(payload.get("answer") or "").strip()
+            cot_raw = str(payload.get("cot") or "").strip()
+            long_cot_raw = str(payload.get("long_cot") or "").strip()
+            has_all = bool(answer_raw and cot_raw and long_cot_raw)
+            label_counts["complete" if has_all else "incomplete"] += 1
+            annotated_rows.append({
+                **base_row,
+                "answer_raw": answer_raw,
+                "cot_raw": cot_raw,
+                "long_cot_raw": long_cot_raw,
+            })
+        else:
+            label = str(payload.get("label") or "").strip().upper()
+            reason = str(payload.get("reason") or "").strip()
+            if label not in labels:  # type: ignore[operator]
+                label = "INVALID"
+            label_counts[label] += 1
+            annotated_rows.append({
+                **base_row,
                 "annotation_label": label,
                 "annotation_reason": reason,
-                "model_response": text,
-                "frames": [str(path) for path in frame_paths],
-            }
-        )
+            })
+
         if (idx + 1) % 20 == 0:
             print(f"[annotate] processed {idx + 1} rows")
 

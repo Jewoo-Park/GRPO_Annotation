@@ -20,15 +20,18 @@ from .utils import (
 
 @dataclass
 class ExportConfig:
-    processed_input_path: str
-    answer_style_path: str
-    reasoning_type_path: str
     output_path: str
     summary_path: str
+    # --- classic annotation-based export ---
+    processed_input_path: Optional[str] = None
+    answer_style_path: Optional[str] = None
+    reasoning_type_path: Optional[str] = None
     include_reasoning_type_hint: bool = True
     include_answer_style_hint: bool = True
     default_answer_style: str = "COT"
     default_reasoning_type: str = "ABSTRACT"
+    # --- generation-based export (generate_sft task) ---
+    generated_path: Optional[str] = None
     max_samples: Optional[int] = None
 
 
@@ -109,9 +112,101 @@ def build_instruction(
     return "\n".join(line for line in lines if line is not None).strip()
 
 
+def export_from_generated(
+    generated_rows: list[dict],
+    max_samples: Optional[int],
+) -> tuple[list[dict], dict]:
+    if max_samples is not None:
+        generated_rows = generated_rows[:max_samples]
+
+    exported_rows: list[dict] = []
+    stats: Counter = Counter()
+
+    for row in generated_rows:
+        question = str(row.get("question") or "")
+        options = [str(opt) for opt in (row.get("options") or [])]
+        instruction = build_question_with_options(question=question, options=options)
+
+        answer_raw = str(row.get("answer_raw") or "").strip()
+        cot_raw = str(row.get("cot_raw") or "").strip()
+        long_cot_raw = str(row.get("long_cot_raw") or "").strip()
+
+        if not answer_raw:
+            stats["skip_missing_answer"] += 1
+            continue
+
+        base = {
+            "input": "",
+            "question_id": row.get("question_id"),
+            "video_id": row.get("video_id"),
+            "source_subset": row.get("source_subset"),
+            "question_category": row.get("question_category"),
+            "frames": row.get("frames"),
+            "gold_answer": answer_raw,
+        }
+
+        exported_rows.append({
+            "instruction": instruction,
+            "output": f"<ANSWER>\n{answer_raw}\n</ANSWER>",
+            "reasoning_depth": "ANSWER",
+            **base,
+        })
+        stats["ANSWER"] += 1
+
+        if cot_raw:
+            exported_rows.append({
+                "instruction": instruction,
+                "output": f"<COT>\n{cot_raw}\n</COT>\n<ANSWER>\n{answer_raw}\n</ANSWER>",
+                "reasoning_depth": "COT",
+                **base,
+            })
+            stats["COT"] += 1
+        else:
+            stats["skip_missing_cot"] += 1
+
+        if long_cot_raw:
+            exported_rows.append({
+                "instruction": instruction,
+                "output": f"<LONG_COT>\n{long_cot_raw}\n</LONG_COT>\n<ANSWER>\n{answer_raw}\n</ANSWER>",
+                "reasoning_depth": "LONG_COT",
+                **base,
+            })
+            stats["LONG_COT"] += 1
+        else:
+            stats["skip_missing_long_cot"] += 1
+
+    return exported_rows, dict(stats)
+
+
 def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
+
+    output_path = Path(cfg.output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # --- generation-based export (generate_sft task) ---
+    if cfg.generated_path:
+        generated_rows = load_jsonl(Path(cfg.generated_path))
+        if not generated_rows:
+            raise SystemExit(f"No rows found in {cfg.generated_path}")
+        exported_rows, stats = export_from_generated(generated_rows, cfg.max_samples)
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(exported_rows, f, ensure_ascii=False, indent=2)
+        summary = {
+            "generated_path": str(Path(cfg.generated_path).resolve()),
+            "output_path": str(output_path.resolve()),
+            "input_rows": len(generated_rows),
+            "exported_rows": len(exported_rows),
+            "stats": stats,
+        }
+        write_json(Path(cfg.summary_path), summary)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+
+    # --- classic annotation-based export ---
+    if not cfg.processed_input_path:
+        raise SystemExit("Either 'generated_path' or 'processed_input_path' must be set in config.")
 
     processed_rows = load_jsonl(Path(cfg.processed_input_path))
     if cfg.max_samples is not None:
@@ -120,12 +215,12 @@ def main() -> None:
         raise SystemExit(f"No processed rows found in {cfg.processed_input_path}")
 
     answer_style_map = load_annotation_map(
-        path=Path(cfg.answer_style_path),
+        path=Path(cfg.answer_style_path or ""),
         expected_task="answer_style",
         allowed_labels=set(ANSWER_STYLE_LABELS),
     )
     reasoning_type_map = load_annotation_map(
-        path=Path(cfg.reasoning_type_path),
+        path=Path(cfg.reasoning_type_path or ""),
         expected_task="reasoning_type",
         allowed_labels=set(REASONING_TYPE_LABELS),
     )
@@ -137,9 +232,9 @@ def main() -> None:
     if default_reasoning_type not in set(REASONING_TYPE_LABELS):
         raise ValueError(f"Unsupported default_reasoning_type: {cfg.default_reasoning_type}")
 
-    stats = Counter()
-    label_counts = Counter()
-    exported_rows: list[dict] = []
+    stats: Counter = Counter()
+    label_counts: Counter = Counter()
+    exported_rows = []
 
     for row in processed_rows:
         key = sample_key(row)
@@ -199,15 +294,13 @@ def main() -> None:
         else:
             stats["rows_with_default_reasoning_type"] += 1
 
-    output_path = Path(cfg.output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(exported_rows, f, ensure_ascii=False, indent=2)
 
     summary = {
         "processed_input_path": str(Path(cfg.processed_input_path).resolve()),
-        "answer_style_path": str(Path(cfg.answer_style_path).resolve()),
-        "reasoning_type_path": str(Path(cfg.reasoning_type_path).resolve()),
+        "answer_style_path": str(Path(cfg.answer_style_path or "").resolve()),
+        "reasoning_type_path": str(Path(cfg.reasoning_type_path or "").resolve()),
         "output_path": str(output_path.resolve()),
         "input_rows": len(processed_rows),
         "exported_rows": len(exported_rows),

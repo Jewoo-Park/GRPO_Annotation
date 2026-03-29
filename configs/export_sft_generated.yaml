@@ -1,0 +1,4 @@
+generated_path: outputs/generate_sft/generated.jsonl
+output_path: outputs/sft/video_r1_cot_sft.json
+summary_path: outputs/sft/summary.json
+max_samples: null
