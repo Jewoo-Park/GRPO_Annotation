@@ -1,0 +1,15 @@
+[
+  {
+    "instruction": "You are given sampled frames from a video and a question about the video.\nAnswer the question based on the visual evidence.\nPrimary reasoning type: TEMPORAL.\nAnswer style: COT. Use concise multi-step reasoning before the final answer.\n\nWhat does the person do last?\n\nOptions:\nA. sits down\nB. picks up a cup\nC. opens a window",
+    "input": "",
+    "output": "<COT>\nThe person walks to the table and then picks up the cup at the end.\n</COT>\n<ANSWER>\nB\n</ANSWER>",
+    "question_id": "q1",
+    "video_id": "v1.mp4",
+    "source_subset": "STAR",
+    "question_category": "STAR",
+    "frames": "subset/sample",
+    "answer_style": "COT",
+    "reasoning_type": "TEMPORAL",
+    "gold_answer": "B"
+  }
+]

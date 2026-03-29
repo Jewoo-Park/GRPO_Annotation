@@ -1,0 +1,17 @@
+{
+  "processed_input_path": "/Users/jw246/Desktop/NTU COSMO LAB/cloned Repos/GRPO_Video_2/video_r1_sft_annotator/.tmp_export_test/processed.jsonl",
+  "answer_style_path": "/Users/jw246/Desktop/NTU COSMO LAB/cloned Repos/GRPO_Video_2/video_r1_sft_annotator/.tmp_export_test/answer_style.jsonl",
+  "reasoning_type_path": "/Users/jw246/Desktop/NTU COSMO LAB/cloned Repos/GRPO_Video_2/video_r1_sft_annotator/.tmp_export_test/reasoning_type.jsonl",
+  "output_path": "/Users/jw246/Desktop/NTU COSMO LAB/cloned Repos/GRPO_Video_2/video_r1_sft_annotator/.tmp_export_test/out.json",
+  "input_rows": 1,
+  "exported_rows": 1,
+  "stats": {
+    "exported_rows": 1,
+    "rows_with_answer_style_annotation": 1,
+    "rows_with_reasoning_type_annotation": 1
+  },
+  "label_counts": {
+    "answer_style:COT": 1,
+    "reasoning_type:TEMPORAL": 1
+  }
+}
