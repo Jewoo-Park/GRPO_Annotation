@@ -18,7 +18,7 @@ from .prompts import (
     generation_system_prompt,
     system_prompt,
 )
-from .utils import collect_frame_paths, load_jsonl, parse_json_block, write_json, write_jsonl
+from .utils import collect_frame_paths, load_jsonl, normalize_answer_text, parse_json_block, write_json, write_jsonl
 
 
 @dataclass
@@ -133,7 +133,7 @@ def main() -> None:
 
         question = str(row.get("question") or "")
         options = [str(opt) for opt in row.get("options") or []]
-        gold_answer = str(row.get("answer") or "")
+        gold_answer = normalize_answer_text(str(row.get("gold_answer") or row.get("answer") or ""))
 
         if is_generation:
             user_prompt = build_generation_prompt(question=question, options=options, gold_answer=gold_answer)
@@ -167,16 +167,12 @@ def main() -> None:
         payload = parse_json_block(text) or {}
 
         base_row = {
-            "question_id": row.get("question_id"),
-            "video_id": row.get("video_id"),
-            "source_subset": row.get("source_subset"),
-            "question_category": row.get("question_category"),
             "question": row.get("question"),
             "options": row.get("options"),
             "gold_answer": gold_answer,
-            "annotation_task": cfg.annotation_task,
-            "model_response": text,
-            "frames": [str(path) for path in frame_paths],
+            "video_path": row.get("video_path"),
+            "source_subset": row.get("source_subset"),
+            "frame_subdir": row.get("frame_subdir"),
         }
 
         if is_generation:
@@ -199,6 +195,9 @@ def main() -> None:
             label_counts[label] += 1
             annotated_rows.append({
                 **base_row,
+                "annotation_task": cfg.annotation_task,
+                "frames": [str(path) for path in frame_paths],
+                "model_response": text,
                 "annotation_label": label,
                 "annotation_reason": reason,
             })

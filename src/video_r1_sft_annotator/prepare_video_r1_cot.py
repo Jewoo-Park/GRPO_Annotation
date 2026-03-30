@@ -11,6 +11,7 @@ from .utils import (
     extract_frames_for_rows,
     hf_token_from_env,
     is_video_row,
+    normalize_answer_text,
     pick_gold_answer,
     pick_options,
     pick_question,
@@ -97,24 +98,15 @@ def main() -> None:
 
         path_value = normalize_repo_path(str(row.get("path") or ""))
         question = pick_question(row)
-        answer = pick_gold_answer(row)
+        gold_answer = normalize_answer_text(pick_gold_answer(row))
         options = pick_options(row)
 
         row_copy = {
-            "question_id": row.get("id") or row.get("question_id"),
             "question": question,
-            "answer": answer,
             "options": options,
-            "process_raw": str(row.get("process") or "").strip(),
-            "solution_raw": str(row.get("solution") or "").strip(),
-            "path": path_value,
+            "gold_answer": gold_answer,
             "video_path": path_value,
-            "video_id": Path(path_value).name if path_value else "",
             "source_subset": subset,
-            "question_category": subset,
-            "dataset_name": "video_r1_cot",
-            "problem_type": str(row.get("problem_type") or "").strip(),
-            "data_source": str(row.get("data_source") or "").strip(),
         }
         filtered_rows.append(row_copy)
         per_subset_counts[subset] += 1

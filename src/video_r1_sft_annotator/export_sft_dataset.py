@@ -127,6 +127,7 @@ def export_from_generated(
         options = [str(opt) for opt in (row.get("options") or [])]
         instruction = build_question_with_options(question=question, options=options)
 
+        gold_answer = normalize_answer_text(str(row.get("gold_answer") or ""))
         answer_raw = str(row.get("answer_raw") or "").strip()
         cot_raw = str(row.get("cot_raw") or "").strip()
         long_cot_raw = str(row.get("long_cot_raw") or "").strip()
@@ -137,12 +138,10 @@ def export_from_generated(
 
         base = {
             "input": "",
-            "question_id": row.get("question_id"),
-            "video_id": row.get("video_id"),
+            "video_path": row.get("video_path"),
             "source_subset": row.get("source_subset"),
-            "question_category": row.get("question_category"),
-            "frames": row.get("frames"),
-            "gold_answer": answer_raw,
+            "frame_subdir": row.get("frame_subdir"),
+            "gold_answer": gold_answer or answer_raw,
         }
 
         exported_rows.append({
