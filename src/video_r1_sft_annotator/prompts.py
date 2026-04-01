@@ -95,6 +95,40 @@ def build_generation_prompt(question: str, options: list[str], gold_answer: str)
     )
 
 
+def build_granularity_generation_prompt(question: str, options: list[str], gold_answer: str) -> str:
+    option_block = "\n".join(options) if options else ""
+    return (
+        "You are constructing training data for a multimodal video reasoning model.\n"
+        "The input includes video frames, a question, answer options, and the correct answer.\n\n"
+        "Your task is to choose the SINGLE most appropriate granularity type for solving the question, "
+        "then write one reasoning annotation grounded in the frames from that perspective.\n\n"
+        "Granularity types:\n"
+        "- ABSTRACT: semantic or meaning-level understanding is primary. This includes category recognition, "
+        "caption-like understanding, intent, high-level VQA, and retrieval-style semantics.\n"
+        "- TEMPORAL: time and sequence understanding is primary. This includes ordering, progression, "
+        "before/after relations, temporal localization, temporal grounding, and summarization over time.\n"
+        "- SPATIOTEMPORAL: both spatial relations and temporal evolution are primary. This includes motion, "
+        "object interaction over time, tracking, and spatiotemporal grounding.\n\n"
+        "Instructions:\n"
+        "- First decide which granularity type best matches the reasoning required by the question.\n"
+        "- Then write a concise but meaningful thinking trace from that granularity perspective.\n"
+        "- The thinking must be grounded in the frames and must support the provided correct answer.\n"
+        "- Do not write three candidates. Choose exactly one granularity type.\n"
+        "- Do not output unsupported assumptions.\n"
+        "- Do not include conversational filler.\n\n"
+        "Output format (STRICT JSON):\n"
+        "{\n"
+        '  "granularity_type": "ABSTRACT or TEMPORAL or SPATIOTEMPORAL",\n'
+        '  "thinking": "<reasoning annotation written from the selected granularity perspective>"\n'
+        "}\n\n"
+        "Input:\n"
+        "- Video frames: provided as visual sequence\n"
+        f"- Question:\n{question}\n\n"
+        f"- Options:\n{option_block}\n\n"
+        f"- Correct answer:\n{gold_answer}\n"
+    )
+
+
 def generation_system_prompt() -> str:
     return (
         "You are a careful video-annotation assistant.\n"
@@ -103,6 +137,17 @@ def generation_system_prompt() -> str:
         "all grounded in what you observe in the frames.\n"
         "Respond with valid JSON only. Example: "
         '{"answer": "...", "cot": "...", "long_cot": "..."}'
+    )
+
+
+def granularity_generation_system_prompt() -> str:
+    return (
+        "You are a careful video-annotation assistant.\n"
+        "Analyze the provided video frames, question, options, and correct answer.\n"
+        "Choose the single best granularity type among ABSTRACT, TEMPORAL, and SPATIOTEMPORAL, "
+        "then generate one reasoning annotation from that perspective.\n"
+        "Respond with valid JSON only. Example: "
+        '{"granularity_type": "TEMPORAL", "thinking": "..."}'
     )
 
 

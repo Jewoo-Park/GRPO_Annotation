@@ -15,7 +15,9 @@ from .prompts import (
     REASONING_TYPE_LABELS,
     build_annotation_prompt,
     build_generation_prompt,
+    build_granularity_generation_prompt,
     generation_system_prompt,
+    granularity_generation_system_prompt,
     system_prompt,
 )
 from .utils import collect_frame_paths, load_jsonl, normalize_answer_text, parse_json_block, write_json, write_jsonl
@@ -71,6 +73,7 @@ def resize_image_to_pixel_bounds(image: Image.Image, max_pixels: int, min_pixels
 
 
 GENERATION_TASK = "generate_sft"
+GRANULARITY_GENERATION_TASK = "generate_granularity"
 
 
 def allowed_labels(task: str) -> set[str]:
@@ -113,7 +116,8 @@ def main() -> None:
     )
 
     is_generation = cfg.annotation_task == GENERATION_TASK
-    labels = None if is_generation else allowed_labels(cfg.annotation_task)
+    is_granularity_generation = cfg.annotation_task == GRANULARITY_GENERATION_TASK
+    labels = None if (is_generation or is_granularity_generation) else allowed_labels(cfg.annotation_task)
     label_counts = Counter()
     annotated_rows: list[dict] = []
 
@@ -138,6 +142,13 @@ def main() -> None:
         if is_generation:
             user_prompt = build_generation_prompt(question=question, options=options, gold_answer=gold_answer)
             sys_prompt_text = generation_system_prompt()
+        elif is_granularity_generation:
+            user_prompt = build_granularity_generation_prompt(
+                question=question,
+                options=options,
+                gold_answer=gold_answer,
+            )
+            sys_prompt_text = granularity_generation_system_prompt()
         else:
             user_prompt = build_annotation_prompt(
                 task=cfg.annotation_task,
@@ -186,6 +197,21 @@ def main() -> None:
                 "answer_raw": answer_raw,
                 "cot_raw": cot_raw,
                 "long_cot_raw": long_cot_raw,
+            })
+        elif is_granularity_generation:
+            granularity_type = str(payload.get("granularity_type") or "").strip().upper()
+            thinking = str(payload.get("thinking") or "").strip()
+            if granularity_type not in set(REASONING_TYPE_LABELS):
+                granularity_type = "INVALID"
+            label_counts[granularity_type] += 1
+            if not thinking:
+                label_counts["missing_thinking"] += 1
+            annotated_rows.append({
+                **base_row,
+                "annotation_task": cfg.annotation_task,
+                "granularity_type": granularity_type,
+                "granularity_thinking_raw": thinking,
+                "model_response": text,
             })
         else:
             label = str(payload.get("label") or "").strip().upper()
