@@ -99,35 +99,56 @@ def build_granularity_generation_prompt(question: str, options: list[str], gold_
     option_block = "\n".join(options) if options else ""
     return (
         "You are constructing training data for a multimodal video reasoning model.\n"
-        "The input includes video frames, a question, answer options, and the correct answer.\n\n"
-        "Your task is to choose the SINGLE most appropriate granularity type for solving the question, "
-        "then write one reasoning annotation grounded in the frames from that perspective.\n\n"
+        "The input includes video frames, a question, answer options, and the gold answer.\n\n"
+
+        "Your task is to do the following in order:\n"
+        "1. First choose the SINGLE most appropriate granularity type for solving the question.\n"
+        "2. Briefly explain why this granularity is the best fit.\n"
+        "3. Then write one reasoning annotation grounded in the frames from that selected perspective.\n\n"
+
         "Granularity types:\n"
-        "- ABSTRACT: semantic or meaning-level understanding is primary. This includes category recognition, "
-        "caption-like understanding, intent, high-level VQA, and retrieval-style semantics.\n"
-        "- TEMPORAL: time and sequence understanding is primary. This includes ordering, progression, "
-        "before/after relations, temporal localization, temporal grounding, and summarization over time.\n"
-        "- SPATIOTEMPORAL: both spatial relations and temporal evolution are primary. This includes motion, "
-        "object interaction over time, tracking, and spatiotemporal grounding.\n\n"
-        "Instructions:\n"
-        "- First decide which granularity type best matches the reasoning required by the question.\n"
-        "- Then write a concise but meaningful thinking trace from that granularity perspective.\n"
-        "- The thinking must be grounded in the frames and must support the provided correct answer.\n"
-        "- Do not write three candidates. Choose exactly one granularity type.\n"
-        "- Do not output unsupported assumptions.\n"
+        "- ABSTRACT: choose when the question can be solved mainly through semantic understanding, "
+        "recognition, concept interpretation, OCR, diagram/chart reading, counting in a mostly static scene, "
+        "or symbolic/mathematical reasoning. Do NOT choose ABSTRACT if temporal progression is central, "
+        "or if spatial relations changing over time are central.\n"
+        "- TEMPORAL: choose when the question mainly depends on event order, temporal progression, "
+        "before/after relations, or changes over time. Do NOT choose TEMPORAL if spatial interaction or "
+        "location change over time is also central.\n"
+        "- SPATIOTEMPORAL: choose when the question requires both temporal evolution and spatial relations, "
+        "such as motion trajectories, object interactions, collisions, tracking, approaching, moving away, "
+        "or location changes over time.\n\n"
+
+        "Decision procedure:\n"
+        "1. Decide whether solving the question primarily requires temporal progression.\n"
+        "2. If yes, decide whether spatial relations or movement through space are also essential.\n"
+        "3. Choose SPATIOTEMPORAL only if both time and spatial relations are essential.\n"
+        "4. Choose TEMPORAL if time is essential but spatial relations are not central.\n"
+        "5. Choose ABSTRACT only if the question can be solved without primarily relying on temporal progression "
+        "or spatial-temporal interaction.\n"
+        "6. Do not default to ABSTRACT merely because it is semantically broad.\n\n"
+
+        "Reasoning instructions:\n"
+        "- The reasoning must be grounded in the frames.\n"
+        "- The reasoning must follow the selected granularity type.\n"
+        "- First select the granularity, then write reasoning from that perspective.\n"
+        "- Do not justify the answer merely because the gold answer is given.\n"
+        "- Do not mention phrases such as 'correct answer', 'provided answer', or 'supports the answer'.\n"
+        "- Do not add unsupported assumptions.\n"
         "- Do not include conversational filler.\n\n"
+
         "Output format (STRICT JSON):\n"
         "{\n"
         '  "granularity_type": "ABSTRACT or TEMPORAL or SPATIOTEMPORAL",\n'
+        '  "selection_reason": "<one sentence explaining why this granularity is the best fit>",\n'
         '  "thinking": "<reasoning annotation written from the selected granularity perspective>"\n'
         "}\n\n"
+
         "Input:\n"
         "- Video frames: provided as visual sequence\n"
         f"- Question:\n{question}\n\n"
         f"- Options:\n{option_block}\n\n"
-        f"- Correct answer:\n{gold_answer}\n"
+        f"- Gold answer:\n{gold_answer}\n"
     )
-
 
 def generation_system_prompt() -> str:
     return (
